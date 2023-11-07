@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
+using System.Linq.Dynamic.Core;
 
 namespace backend003.Controllers;
 /*
@@ -28,6 +29,114 @@ public class teste : ControllerBase
 	}
 }
 */
+[Route("livros/form")]
+public class livrosForm : ControllerBase
+{
+	[HttpPost(Name = "livros/form")]
+	[SwaggerOperation(Summary = "Criar um novo Livro", Tags = new[] { "Livros" })]
+	[SwaggerResponse(201, "Livro adicionado com sucesso")]
+	[SwaggerResponse(400, "Requisição inválida")]
+	public async Task<IActionResult> Post([FromForm] Livros.Models.LivroCount data)
+	{
+		return Ok($"{data.where}");
+	}
+}
+
+[Route("livros/count")]
+public class livrosCount : ControllerBase
+{
+	[HttpPost(Name = "livros/count")]
+	[SwaggerOperation(Summary = "Criar um novo Livro", Tags = new[] { "Livros" })]
+	[SwaggerResponse(201, "Livro adicionado com sucesso")]
+	[SwaggerResponse(400, "Requisição inválida")]
+	public async Task<IActionResult> Post([FromBody] Livros.Models.LivroCount data)
+	{
+		using (var db = new Livros.Models.livroContext())
+		{
+			var query = db.Livros.AsQueryable();
+			if (
+				data != null &&
+				!string.IsNullOrEmpty(data.where) &&
+				data.where != "string"
+			)
+			{
+				query = query.Where(data.where);
+			}
+			int count = await query.CountAsync();
+			return Ok(count);
+		}
+		return BadRequest("0");
+	}
+}
+
+[Route("livros/filter")]
+public class livrosFilter : ControllerBase
+{
+	[HttpPost(Name = "livros/filter")]
+	[SwaggerOperation(Summary = "Criar um novo Livro", Tags = new[] { "Livros" })]
+	[SwaggerResponse(201, "Livro adicionado com sucesso")]
+	[SwaggerResponse(400, "Requisição inválida")]
+	public async Task<IActionResult> Post([FromBody] Livros.Models.LivroFilter data)
+	{
+		var rp = new Livros.Models.LivroResponse { };
+		using (var db = new Livros.Models.livroContext())
+		{
+			string table = new Livros.Models.LivroTable().name;
+
+			string where = "";
+			if (
+				data != null &&
+				!string.IsNullOrEmpty(data.where) &&
+				data.where != "string"
+			)
+			{
+				where = $"WHERE {data.where}";
+			}
+
+			string order = "ORDER BY LivroId ASC";
+			if (
+				data != null &&
+				!string.IsNullOrEmpty(data.order) &&
+				data.order != "string" &&
+				!string.IsNullOrEmpty(data.meaning) &&
+				data.meaning != "string"
+			)
+			{
+				order = $"ORDER BY {data.order} {data.meaning}";
+			}
+
+			string limit = "";
+			if (
+				data != null &&
+				!string.IsNullOrEmpty(data.order) &&
+				data.order != "string" &&
+				!string.IsNullOrEmpty(data.meaning) &&
+				data.meaning != "string" &&
+				data.page != null &&
+				int.TryParse(data.page.ToString(), out var p) &&
+				Convert.ToInt32(data.page.ToString()) > 0 &&
+				int.TryParse(data.qtd.ToString(), out var q) &&
+				Convert.ToInt32(data.qtd.ToString()) > 0
+			)
+			{
+				int qtd = Convert.ToInt32(data.qtd.ToString());
+				int page = Convert.ToInt32(data.page.ToString());
+				int offset = (page - 1) * qtd;
+				limit = $"OFFSET {offset} ROWS FETCH NEXT {qtd} ROWS ONLY";
+			}
+
+			var livros = await db.Livros
+			.FromSqlRaw($"SELECT * FROM {table} {where} {order} {limit}")
+			.ToListAsync();
+			rp.rows = livros;
+			return Ok(rp);
+		}
+		rp.status_id = 0;
+		rp.status = "Alguma coisa aconteceu";
+		return BadRequest(rp);
+	}
+}
+
 [Route("livros")]
 public class livros : ControllerBase
 {
@@ -36,7 +145,8 @@ public class livros : ControllerBase
 	{
 		using (var db = new Livros.Models.livroContext())
 		{
-			var livros = await db.Livros.ToArrayAsync();
+			// var livros = await db.Livros.ToArrayAsync();
+			var livros = await db.Livros.ToListAsync();
 			return Ok(livros);
 		}
 	}
@@ -61,8 +171,8 @@ public class livros : ControllerBase
 		};
 		if (
 			data == null ||
-			string.IsNullOrWhiteSpace(data.Titulo) ||
-			string.IsNullOrWhiteSpace(data.Autor) ||
+			string.IsNullOrEmpty(data.Titulo) ||
+			string.IsNullOrEmpty(data.Autor) ||
 			!int.TryParse(data.AnoPublicacao.ToString(), out var a)
 		)
 		{
@@ -97,8 +207,8 @@ public class livros : ControllerBase
 		};
 		if (
 			data == null ||
-			string.IsNullOrWhiteSpace(data.Titulo) ||
-			string.IsNullOrWhiteSpace(data.Autor) ||
+			string.IsNullOrEmpty(data.Titulo) ||
+			string.IsNullOrEmpty(data.Autor) ||
 			!int.TryParse(data.AnoPublicacao.ToString(), out var a)
 		)
 		{
